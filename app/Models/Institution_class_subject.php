@@ -3,8 +3,9 @@
 namespace App\Models;
 
 use Illuminate\Database\Eloquent\Model;
+use Webpatser\Uuid\Uuid;
 
-class Institution_class_subject extends Model  {
+class Institution_class_subject extends Base_Model  {
 
     /**
      * The database table used by the model.
@@ -47,15 +48,6 @@ class Institution_class_subject extends Model  {
         ->whereHas('institutionGradeSubject', function ($query) {
                 $query->where('auto_allocation',1);
         });
-        // ->using('App\Models\Institution_subject','institution_subjects.education_subject_id','education_grades_subjects.education_subject_id');
-        // return $this->belongsToMany('App\Models\Education_grades_subject','institution_subjects','education_subject_id')
-        // ->using('App\Models\Institution_subject','institution_subjects.education_subject_id','education_grades_subjects.education_subject_id')
-        // ->where('education_grades_subjects.auto_allocation','=',1);
-        // ->wherePivotIn('auto_allocation', '=',1);
-        // ->with(['institutionGradeSubject'])
-            // ->whereHas('institutionGradeSubject', function ($query) {
-            //     $query->where('auto_allocation', '=',1);
-            // });
     }
 
     public function institutionOptionalSubject(){
@@ -67,24 +59,41 @@ class Institution_class_subject extends Model  {
 
     }
 
+    public static function boot()
+    {
+        parent::boot();
+        self::creating(function ($model) {
+            $model->id = (string) Uuid::generate(4);
+        });
+    }
+
     public function institutionSubject(){
         return $this->belongsTo('App\Models\Institution_subject','institution_subject_id','id')
         ->with('institutionGradeSubject');
     }
 
 
-    public static function getMandetorySubjects($institutionClass){
+    public static function getMandatorySubjects($institutionClass){
         $institutionGrade = Institution_class_grade::where('institution_class_id', '=', $institutionClass)->first();
         $mandatorySubject = Institution_class_subject::with(['institutionSubject'])
             ->whereHas('institutionSubject', function ($query) use ($institutionGrade) {
                 $query->whereHas('institutionGradeSubject',function($query){
                     $query->where('auto_allocation',1);
                 })->where('education_grade_id', $institutionGrade->education_grade_id);
-                // ->where('auto_allocation', $institutionGrade->education_grade_id);
             })
             ->where('institution_class_id', '=', $institutionClass)
             ->get()->toArray();
         return $mandatorySubject;
+    }
+
+    public static function getAllSubjects($institutionClass){
+        $allSubjects = Institution_class_subject::with(['institutionSubject'])
+        ->whereHas('institutionSubject', function ($query) use ($institutionClass) {
+            $query->whereHas('institutionGradeSubject')->where('education_grade_id', $institutionClass['education_grade_id']);
+        })
+        ->where('institution_class_id', '=', $institutionClass['id'])
+        ->get()->toArray();
+        return $allSubjects;
     }
 
     public static function getStudentOptionalSubject($subjects, $student, $row, $institution) {
@@ -104,5 +113,17 @@ class Institution_class_subject extends Model  {
                 $data[] = $subjectId[0];
         }
         return $data;
+    }
+
+    public function getInstitutionClassSubjects($academicPeriodId,$classIds){
+        return self::query()
+            ->whereIn('institution_class_id',$classIds)
+            ->get()
+            ->toArray();
+    }
+
+    public function isDuplicated($subject){
+        return self::query()->where('institution_subject_id',$subject['institution_subject_id'])
+            ->where('institution_class_id',$subject['institution_class_id'])->get()->toArray();
     }
 }

@@ -3,6 +3,7 @@
 namespace App\Http\Controllers;
 
 use App\Models\Upload;
+use Aws\Ses\SesClient;
 use Illuminate\Http\Request;
 use Illuminate\Support\Facades\Auth;
 use Illuminate\Support\Facades\DB;
@@ -10,8 +11,6 @@ use Illuminate\Support\Facades\Response;
 use Illuminate\Support\Facades\Storage;
 use Illuminate\Support\Facades\Validator;
 use App\Models\Institution_class;
-use App\Jobs\ProcessImportFiles;
-use Illuminate\View\View;
 
 
 class FileController extends Controller
@@ -20,6 +19,14 @@ class FileController extends Controller
 
     public function __construct()
     {
+        $this->middleware('auth');
+        $this->ses = new SesClient(
+            [
+                'version' => '2010-12-01',
+                'region' => 'us-east-2',
+
+            ]
+        );
     }
 
     /**
@@ -27,6 +34,8 @@ class FileController extends Controller
      * @return \Illuminate\Http\JsonResponse
      */
     public function upload(Request $request){
+
+
 
         $validator = Validator::make(
             [
@@ -44,10 +53,21 @@ class FileController extends Controller
             ],
             ['email.required' => 'You dont have email  in your account, pleas contact your Zonal/Provincial Coordinator and update the email to get notification']
         );
-        if ($validator->fails()) {
-            return back()
-                ->withErrors($validator);
-        }
+//        try {
+//            $result = $this->ses->verifyEmailIdentity([
+//                'EmailAddress' => auth()->user()->email,
+//            ]);
+//            var_dump($result);
+//        } catch (AwsException $e) {
+//            // output error message if fails
+//            echo $e->getMessage();
+//            echo "\n";
+//        }
+//        if ($validator->fails()) {
+//            return back()
+//                ->withErrors($validator);
+//        }
+
 
         $uploadFile = $validator->validated()['import_file'];
         $class = Institution_class::find($validator->validated()['class']);
@@ -89,7 +109,7 @@ class FileController extends Controller
 
     public function downloadTemplate(){
         $filename = 'censusNo_className_sis_students_bulk_upload';
-        $version = '2007_V1.7_20200116.xlsx';
+        $version = '2007_V2.0.2_20201211.xlsx';
         $file_path = storage_path() .'/app/public/'. $filename.'_'.$version;;
         if (file_exists($file_path))
         {
@@ -99,7 +119,7 @@ class FileController extends Controller
         }
         else
         {
-            return View::make('errors.404');
+            return response()->view('errors.404');
         }
     }
 

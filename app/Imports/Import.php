@@ -2,71 +2,74 @@
 
 namespace App\Imports;
 
+use Exception;
+use App\Models\User;
+use Webpatser\Uuid\Uuid;
+use App\Models\Nationality;
+use App\Rules\admissionAge;
+use App\Models\User_contact;
+use Lsf\UniqueUid\UniqueUid;
+use App\Models\Identity_type;
+use App\Models\Security_user;
+use App\Models\User_identity;
+use App\Imports\StudentUpdate;
+use App\Models\Import_mapping;
+use App\Models\Security_group;
+use App\Models\User_body_mass;
+use App\Models\Academic_period;
+use App\Models\Student_guardian;
+use App\Models\User_nationality;
+use App\Models\Institution_class;
+use App\Models\User_special_need;
 use App\Mail\StudentCountExceeded;
 use App\Mail\StudentImportSuccess;
+use Illuminate\Support\Facades\DB;
+use App\Models\Area_administrative;
+use App\Models\Institution_student;
+use App\Models\Institution_subject;
+use App\Models\Workflow_transition;
+use Illuminate\Support\Facades\Log;
+use Illuminate\Support\Facades\Mail;
+use Illuminate\Support\Facades\Config;
+use App\Models\Institution_class_grade;
+use App\Models\Special_need_difficulty;
+use Illuminate\Support\Facades\Request;
+use Maatwebsite\Excel\Concerns\ToModel;
 use App\Models\Education_grades_subject;
 use App\Models\Institution_class_student;
 use App\Models\Institution_class_subject;
-use App\Models\Institution_student_admission;
-use App\Models\Institution_subject;
-use App\Models\Institution_subject_student;
-use App\Models\User_special_need;
-use App\Models\Security_group;
-use App\Models\Security_user;
-use App\Models\User;
-use App\Models\User_body_mass;
-use App\Models\Institution_student;
-use App\Models\Import_mapping;
-use App\Models\Identity_type;
-use App\Models\Student_guardian;
-use App\Models\Academic_period;
-use App\Models\Institution_class;
-use App\Models\Institution_class_grade;
-use App\Models\Area_administrative;
-use App\Models\Special_need_difficulty;
-use App\Models\Workflow_transition;
-use App\Models\User_nationality;
-use App\Models\User_identity;
-use App\Models\Nationality;
-use App\Rules\admissionAge;
-use Illuminate\Support\Facades\Config;
-use Illuminate\Support\Facades\Log;
-use Illuminate\Support\Facades\Mail;
-use Illuminate\Support\Facades\Request;
-use Maatwebsite\Excel\Concerns\RegistersEventListeners;
-use Maatwebsite\Excel\Concerns\ToModel;
-use Maatwebsite\Excel\Concerns\WithBatchInserts;
-use Maatwebsite\Excel\Concerns\WithStartRow;
-use Illuminate\Support\Facades\DB;
-use Maatwebsite\Excel\Concerns\Importable;
 use Illuminate\Support\Facades\Validator;
-use Maatwebsite\Excel\Concerns\WithValidation;
-use Maatwebsite\Excel\Concerns\WithHeadingRow;
-use Maatwebsite\Excel\Concerns\WithMultipleSheets;
-use Maatwebsite\Excel\Concerns\WithEvents;
-use Maatwebsite\Excel\Concerns\WithMapping;
-use Maatwebsite\Excel\Events\AfterImport;
 use Maatwebsite\Excel\Concerns\WithLimit;
+use Maatwebsite\Excel\Events\AfterImport;
 use Maatwebsite\Excel\Events\BeforeSheet;
+use Maatwebsite\Excel\Validators\Failure;
+use Maatwebsite\Excel\Concerns\Importable;
+use Maatwebsite\Excel\Concerns\WithEvents;
 use Maatwebsite\Excel\Events\BeforeImport;
 use Maatwebsite\Excel\Jobs\AfterImportJob;
-use Maatwebsite\Excel\Validators\Failure;
-use Maatwebsite\Excel\Concerns\SkipsOnError;
+use App\Models\Institution_subject_student;
 use Maatwebsite\Excel\Concerns\SkipsErrors;
-use Maatwebsite\Excel\Concerns\SkipsOnFailure;
+use Maatwebsite\Excel\Concerns\WithMapping;
+use Maatwebsite\Excel\Concerns\SkipsOnError;
+use Maatwebsite\Excel\Concerns\WithStartRow;
+use App\Models\Institution_student_admission;
 use Maatwebsite\Excel\Concerns\SkipsFailures;
-use Webpatser\Uuid\Uuid;
-use Exception;
-use App\Imports\StudentUpdate;
+use Maatwebsite\Excel\Concerns\SkipsOnFailure;
+use Maatwebsite\Excel\Concerns\WithHeadingRow;
+use Maatwebsite\Excel\Concerns\WithValidation;
+use Maatwebsite\Excel\Concerns\WithBatchInserts;
+use Maatwebsite\Excel\Concerns\WithMultipleSheets;
+use Maatwebsite\Excel\Concerns\RegistersEventListeners;
 use Maatwebsite\Excel\Exceptions\ConcernConflictException;
 
 class Import
 {
     //Parent class for import script
     use Importable,
-    RegistersEventListeners;
+        RegistersEventListeners;
 
-    public function __construct($file) {
+    public function __construct($file)
+    {
         $this->sheetNames = [];
         $this->file = $file;
         $this->sheetData = [];
@@ -78,9 +81,11 @@ class Import
         $this->femaleStudentsCount = 0;
         $this->highestRow = 0;
         $this->isValidSheet = true;
+        $this->uniqueUid = new UniqueUid();
     }
 
-    public function limit(): int {
+    public function limit(): int
+    {
         $highestColumn = $this->worksheet->getHighestDataColumn(3);
         $higestRow = 0;
         for ($row = $this->startRow(); $row <= $this->highestRow; $row++) {
@@ -94,84 +99,46 @@ class Import
         return $higestRow;
     }
 
-    public function validateColumns($column) {
-        $columns = [
-            "remarks",
-            "student_id",
-            "full_name",
-            "gender_mf",
-            "date_of_birth_yyyy_mm_dd",
-            "address",
-            "birth_registrar_office_as_in_birth_certificate",
-            "birth_divisional_secretariat",
-            "nationality",
-            "identity_type",
-            "identity_number",
-            "special_need_type",
-            "special_need",
-            "bmi_academic_period",
-            "bmi_date_yyyy_mm_dd",
-            "bmi_height",
-            "bmi_weight",
-            "admission_no",
-            "academic_period",
-            "education_grade",
-            "start_date_yyyy_mm_dd",
-            "option_1",
-            "option_2",
-            "option_3",
-            "option_4",
-            "option_5",
-            "option_6",
-            "option_7",
-            "option_8",
-            "option_9",
-            "option_10",
-            "option_11",
-            "option_12",
-            "option_13",
-            "option_14",
-            "option_15",
-            "option_16",
-            "fathers_full_name",
-            "fathers_date_of_birth_yyyy_mm_dd",
-            "fathers_address",
-            "fathers_address_area",
-            "fathers_nationality",
-            "fathers_identity_type",
-            "fathers_identity_number",
-            "mothers_full_name",
-            "mothers_date_of_birth_yyyy_mm_dd",
-            "mothers_address",
-            "mothers_address_area",
-            "mothers_nationality",
-            "mothers_identity_type",
-            "mothers_identity_number",
-            "guardians_full_name",
-            "name_with_initials",
-            "guardians_gender_mf",
-            "guardians_date_of_birth_yyyy_mm_dd",
-            "guardians_address",
-            "guardians_address_area",
-            "guardians_nationality",
-            "guardians_identity_type",
-            "guardians_identity_number",
-        ];
-
-
-
-        if ( ($column !== "") && (!in_array($column,$columns))) {
-            // dd($column);
+    public function validateColumns($column, $existingColumns)
+    {
+        $columns = Config::get('excel.columns');
+        $error = \Illuminate\Validation\ValidationException::withMessages([]);
+        $this->failures = [];
+        if (($column !== "") && (!in_array($column, $columns))) {
             $this->isValidSheet = false;
-            $error = \Illuminate\Validation\ValidationException::withMessages([]);
-                       $failure = new Failure(3, 'remark', [0 => 'Template is not valid for upload, use the template given in the system'], [null]);
-                       $failures = [0 => $failure];
-                       throw new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
+            $this->error[] = 'Unsupported column found ,remove:' . $column;
+            $this->failure = new Failure(3, 'remark', $this->error, [null]);
+            $this->failures = new \Maatwebsite\Excel\Validators\ValidationException($error, [$this->failure]);
+        }
+        if (is_object($this->failures)) {
+            throw $this->failures;
+        }
+    }
+
+    public function validateColumnsToMap($existingColumns)
+    {
+        $columns = Config::get('excel.columns');
+        $optional_columns = Config::get('excel.optional_columns');
+        $columns = array_diff($columns, $optional_columns);
+        $error = \Illuminate\Validation\ValidationException::withMessages([]);
+        $this->failures = [];
+        foreach ($columns as  $column) {
+            if (($column !== "") && (!in_array($column, $existingColumns))) {
+                $this->isValidSheet = false;
+                $this->error[] = 'Missing Column :' . $column . ' Not found';
+                $this->failure = new Failure(3, 'remark', $this->error, [null]);
+                $this->failures = new \Maatwebsite\Excel\Validators\ValidationException($error, [$this->failure]);
+            }
+        }
+        if (is_object($this->failures)) {
+            throw $this->failures;
         }
     }
 
 
-    public function batchSize(): int {
+
+    public function batchSize(): int
+    {
         $highestColumn = $this->worksheet->getHighestDataColumn(3);
         $higestRow = 1;
         for ($row = $this->startRow(); $row <= $this->highestRow; $row++) {
@@ -190,19 +157,22 @@ class Import
     }
 
 
-    public function startRow(): int {
+    public function startRow(): int
+    {
         return 3;
     }
 
-    public function headingRow(): int {
+    public function headingRow(): int
+    {
         return 2;
     }
 
 
-    protected function formateDate($row,$column,$format = 'Y-m-d'){
+    protected function formateDate($row, $column, $format = 'Y-m-d')
+    {
         try {
-            if(!empty($row[$column]) && ($row[$column] !== null)){
-                switch (gettype($row[$column])){
+            if (!empty($row[$column]) && ($row[$column] !== null)) {
+                switch (gettype($row[$column])) {
                     case 'string':
                         $row[$column] = preg_replace('/[^A-Za-z0-9\-]/', '-', $row[$column]);
                         $row[$column] = date($format, strtotime($row[$column])); //date($row[$column]);
@@ -214,33 +184,32 @@ class Import
                 }
             }
             return $row;
-        }catch (Exception $e){
+        } catch (Exception $e) {
             $error = \Illuminate\Validation\ValidationException::withMessages([]);
-            $failure = new Failure(3, 'remark', [0 => 'Template is not valid for upload, use the template given in the system'], [null]);
+            $failure = new Failure(3, 'remark', [0 => 'Template is not valid for upload, use the template given in the system ' . $row[$column] . ' Not a valid date formate'], [null]);
             $failures = [0 => $failure];
             throw new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
         }
-
     }
 
 
-    protected function mapFields($row){
+    protected function mapFields($row)
+    {
 
         $keys = array_keys($row);
 
-        array_walk($keys,array($this,'validateColumns'));
-            $row = $this->formateDate($row,'date_of_birth_yyyy_mm_dd');
-            $row = $this->formateDate($row,'bmi_date_yyyy_mm_dd');
-            $row = $this->formateDate($row,'start_date_yyyy_mm_dd');
-            $row = $this->formateDate($row,'fathers_date_of_birth_yyyy_mm_dd');
-            $row = $this->formateDate($row,'mothers_date_of_birth_yyyy_mm_dd');
-            $row = $this->formateDate($row,'guardians_date_of_birth_yyyy_mm_dd');
-            $columns = Config::get('excel.columns');
-            if(!$this->template) {
-                array_walk($columns, array($this, 'checkKeys'), $row);
-                $this->template = true;
-            }
-            $row['admission_no'] =  str_pad($row['admission_no'], 4, '0', STR_PAD_LEFT);
+        $this->validateColumnsToMap($keys);
+        array_walk($keys, array($this, 'validateColumns'));
+        $row = $this->formateDate($row, 'date_of_birth_yyyy_mm_dd');
+        $row = $this->formateDate($row, 'bmi_date_yyyy_mm_dd');
+        $row = $this->formateDate($row, 'start_date_yyyy_mm_dd');
+        $row = $this->formateDate($row, 'fathers_date_of_birth_yyyy_mm_dd');
+        $row = $this->formateDate($row, 'mothers_date_of_birth_yyyy_mm_dd');
+        $row = $this->formateDate($row, 'guardians_date_of_birth_yyyy_mm_dd');
+
+        $row['admission_no'] =  str_pad($row['admission_no'], 4, '0', STR_PAD_LEFT);
+
+        if (array_key_exists('identity_type', $row)) {
             if ($row['identity_type'] == 'BC' && (!empty($row['birth_divisional_secretariat'])) && ($row['identity_number'] !== null) && $row['date_of_birth_yyyy_mm_dd'] !== null) {
                 $row['identity_number'] =  str_pad($row['identity_number'], 4, '0', STR_PAD_LEFT);
                 // dd(($row['date_of_birth_yyyy_mm_dd']));
@@ -253,23 +222,25 @@ class Import
                     }
                 }
             }
-
+        }
         return $row;
     }
 
-    protected function checkKeys($key,$count,$row){
-       if(array_key_exists($key,$row)){
-           return true;
-       }else{
+    protected function checkKeys($key, $count, $row)
+    {
+        if (array_key_exists($key, $row)) {
+            return true;
+        } else {
             $error = \Illuminate\Validation\ValidationException::withMessages([]);
-            $failure = new Failure($count, 'remark', [0 => 'Template is not valid for upload, use the template given in the system'. $key ,' Is missing form the template'], [null]);
+            $failure = new Failure($count, 'remark', [0 => 'Template is not valid for upload, use the template given in the system ' . $key, ' Is missing form the template'], [null]);
             $failures = [0 => $failure];
             new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
         };
     }
 
 
-    public function array(array $array) {
+    public function array(array $array)
+    {
         $this->sheetData[] = $array;
     }
 
@@ -278,20 +249,15 @@ class Import
      * @return array
      * @throws \Exception
      */
-    public function map($row): array {
-        try {
-         $row = $this->mapFields($row);
-        } catch (\Maatwebsite\Excel\Validators\ValidationException $e) {
-                $error = \Illuminate\Validation\ValidationException::withMessages([]);
-                $failure = new Failure(3, 'remark', [0 => 'Template is not valid for upload, use the template given in the system'], [null]);
-                $failures = [0 => $failure];
-                throw new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
-        }
+    public function map($row): array
+    {
+        $row = $this->mapFields($row);
         return $row;
     }
 
 
-    public function validateClass() {
+    public function validateClass()
+    {
 
         $institutionClass = Institution_class::find($this->file['institution_class_id']);
         $totalMaleStudents = $institutionClass->total_male_students;
@@ -299,23 +265,19 @@ class Import
         $totalStudents = $totalMaleStudents + $totalFemaleStudents;
 
         $exceededStudents = ($totalStudents + $this->limit()) > $institutionClass->no_of_students ? true : false;
-
         if ($exceededStudents == true) {
-            try {
-                $error = \Illuminate\Validation\ValidationException::withMessages([]);
-                $failure = new Failure(3, 'remark', [3 => 'Class student count exceeded! Max number of students is' . $institutionClass->no_of_students], [null]);
-                $failures = [0 => $failure];
-                throw new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
-                Log::info('email-sent', [$this->file]);
-            } catch (Exception $e) {
-                Log::info('email-sending-failed', [$e]);
-            }
+            $error = \Illuminate\Validation\ValidationException::withMessages([]);
+            $failure = new Failure(3, 'remark', ['Class student count exceeded! Max number of students is' . $institutionClass->no_of_students], [null]);
+            $failures = [0 => $failure];
+            throw new \Maatwebsite\Excel\Validators\ValidationException($error, $failures);
+            Log::info('email-sent', [$this->file]);
         } else {
             return true;
         }
     }
 
-    public function getNode(){
+    public function getNode()
+    {
         return $this->file['node'];
     }
 
@@ -323,53 +285,28 @@ class Import
      * @param array $options
      * @return string
      */
-    public  function getUniqueOpenemisId($options = []) {
+    public  function getUniqueOpenemisId($options = [])
+    {
         return Uuid::generate(4);
-//        $prefix = $this->getNode();
-//        $latest = Security_user::orderBy('id', 'DESC')
-//                ->first();
-//
-//        if (is_array($latest)) {
-//            $latestOpenemisNo = $latest['SecurityUser']['openemis_no'];
-//        } else {
-//            $latestOpenemisNo = $latest->openemis_no;
-//        }
-//        if (empty($prefix)) {
-//            $latestDbStamp = $latestOpenemisNo;
-//        } else {
-//            $latestDbStamp = substr($latestOpenemisNo, strlen($prefix));
-//        }
-//
-//        $currentStamp = time();
-//
-//        if ($latestDbStamp >= $currentStamp) {
-//            $newStamp = $latestDbStamp + 1;
-//        } else {
-//            $newStamp = $currentStamp;
-//        }
-//        $check = Security_user::where('openemis_no', '=', $prefix . $newStamp)->first();
-//        if ($check === null) {
-//            return $prefix . $newStamp;
-//        } else {
-//            $newStamp = $latestOpenemisNo + 1;
-//            return  $prefix . $newStamp;
-//        }
     }
 
 
-    protected function updateSubjectCount($subject) {
+    protected function updateSubjectCount($subject)
+    {
         $totalStudents = Institution_subject_student::getStudentsCount($subject['institution_subject_id']);
-        Institution_subject::where(['institution_subject_id' => $subject->institution_subject_id])
-                ->update([
-                    'total_male_students' => $totalStudents['total_male_students'],
-                    'total_female_students' => $totalStudents['total_female_students']]);
+        Institution_subject::where(['id' => $subject['institution_subject_id']])
+            ->update([
+                'total_male_students' => $totalStudents['total_male_students'],
+                'total_female_students' => $totalStudents['total_female_students']
+            ]);
     }
 
 
     /**
      *
      */
-    protected function setStudentSubjects($subject){
+    protected function setStudentSubjects($subject)
+    {
         return [
             'id' => (string) Uuid::generate(4),
             'student_id' => $this->student->student_id,
@@ -385,10 +322,67 @@ class Import
         ];
     }
 
-    protected function insertSubject($subject){
-        if(!Institution_subject_student::isDuplicated($subject)){
+    protected function insertSubject($subject)
+    {
+        if (!Institution_subject_student::isDuplicated($subject)) {
             Institution_subject_student::updateOrInsert($subject);
+        }
+        $this->updateSubjectCount($subject);
+    }
+
+    public function createOrUpdateGuardian($row, $student, $param)
+    {
+        if (!empty($row[$param . 's_full_name']) && ($row[$param . 's_date_of_birth_yyyy_mm_dd'] !== null)) {
+            $guardian = Security_user::createOrUpdateGuardianProfile($row, $param, $this->file);
+            if (!is_null($guardian)) {
+                Security_user::where('id', '=', $guardian->id)
+                    ->update(['is_guardian' => 1]);
+                $guardian['guardian_relation_id'] = $this->setRelation($param, $guardian);
+                Student_guardian::createStudentGuardian($student, $guardian, $this->file['security_user_id']);
+            }
         }
     }
 
+    protected function setRelation($param, $guardian)
+    {
+        switch ($param) {
+            case 'father':
+                return 1;
+            case 'mother':
+                return 2;
+            case 'guardian':
+                return 3;
+        }
+    }
+
+    protected function setGender($row)
+    {
+        switch ($row['gender_mf']) {
+            case 'M':
+                $row['gender_mf'] = 1;
+                $this->maleStudentsCount += 1;
+                break;
+            case 'F':
+                $row['gender_mf'] = 2;
+                $this->femaleStudentsCount += 1;
+                break;
+        }
+        return $row;
+    }
+
+    protected function insertOrUpdateSubjects($row, $student, $institution)
+    {
+        $mandatorySubject = Institution_class_subject::getMandatorySubjects($this->file['institution_class_id']);
+        $subjects = getMatchingKeys($row);
+        $optionalSubjects =  Institution_class_subject::getStudentOptionalSubject($subjects, $student, $row, $institution);
+        $allSubjects = array_merge_recursive($optionalSubjects, $mandatorySubject);
+        if (!empty($allSubjects)) {
+            $allSubjects = unique_multidim_array($allSubjects, 'institution_subject_id');
+            $this->student = $student;
+            $allSubjects = array_map(array($this, 'setStudentSubjects'), $allSubjects);
+            $allSubjects = unique_multidim_array($allSubjects, 'education_subject_id');
+            array_walk($allSubjects, array($this, 'insertSubject'));
+            array_walk($allSubjects, array($this, 'updateSubjectCount'));
+        }
+    }
 }

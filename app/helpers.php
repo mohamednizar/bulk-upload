@@ -1,5 +1,11 @@
 <?php
 
+function get_l_name($name){
+    $name = trim($name);
+    $last_name = (strpos($name,' ') === false) ? '' : preg_replace('#.*\s([\w-]*)$#', '$1', $name);
+    return $last_name;
+}
+
 // Gen name with initials with help of fullname
 function genNameWithInitials($fullname = null){
     $names = explode(' ', $fullname);
@@ -46,6 +52,13 @@ function isEmpty($value){
     return $value['institution_optional_subject'] !== null;
 }
 
+function isEmptyRow($row) {
+    foreach($row as $cell){
+        if (null !== $cell) return false;
+    }
+    return true;
+}
+
 function unique_multidim_array(array $array, $key) {
     $temp_array = array();
     $i = 0;
@@ -77,6 +90,14 @@ function merge_two_arrays($array1,$array2) {
         $data[$id] = array_merge($data[$id],$value);
     }
     return $data;
+}
+
+function array_value_recursive($key, array $arr){
+    $val = array();
+    array_walk_recursive($arr, function($v, $k) use($key, &$val){
+        if($k == $key) array_push($val, $v);
+    });
+    return count($val) > 1 ? $val : array_pop($val);
 }
 
 
@@ -115,7 +136,7 @@ function append_errors_to_excel($error, $count, $reader){
 
         $active_sheet->getStyle($active_cell)
             ->getFill()
-            ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+            ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
             ->getStartColor()
             ->setARGB('FF0000');
 
@@ -143,7 +164,7 @@ function colorizeCell($column,$error,$active_sheet){
 
     $active_sheet->getStyle($active_cell)
         ->getFill()
-        ->setFillType(PHPExcel_Style_Fill::FILL_SOLID)
+        ->setFillType(\PhpOffice\PhpSpreadsheet\Style\Fill::FILL_SOLID)
         ->getStartColor()
         ->setARGB('FF0000');
 
@@ -164,9 +185,37 @@ function errors_unique_array($item,$key){
         return $errors;
 }
 
-function isEmptyRow($row) {
-    foreach($row as $cell){
-        if (null !== $cell) return false;
+function sig_handler($signo){
+    global $child;
+    switch($signo){
+        case 'SIFCLD':
     }
-    return true;
+
 }
+function processParallel($func ,array $arr, $procs = 4,$params =[])
+    {
+        // Break array up into $procs chunks.
+        $chunks   = array_chunk($arr, ceil((count($arr) / $procs)));
+        $pid      = -1;
+        $children = array();
+        foreach ($chunks as $items) {
+            $pid = pcntl_fork();
+            if ($pid === -1) {
+                die('could not fork');
+            } else if ($pid === 0) {
+                // We are the child process. Pass a chunk of items to process.
+                echo('['.getmypid().']This Process executed at'.date("F d, Y h:i:s A")."\n") ;
+                array_walk($items, $func,$params);
+                exit(0);
+            } else {
+                // We are the parent.
+                echo('['.getmypid().']This Process executed at'.date("F d, Y h:i:s A")."\n") ;
+                $children[] = $pid;
+            }
+        }
+        // Wait for children to finish.
+        foreach ($children as $pid) {
+            // We are still the parent.
+            pcntl_waitpid($pid, $status);
+        }
+    }

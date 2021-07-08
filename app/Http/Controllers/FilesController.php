@@ -38,9 +38,9 @@ class FilesController extends Controller
 
             })
             ->editColumn('is_email_sent', function ($data) {
-                if ($data->is_email_sent === 1) {
+                if ($data->is_email_sent == 1) {
                     return "Success";
-                }elseif($data->is_email_sent === 2 ){
+                }elseif($data->is_email_sent == 2 ){
                     return 'Failed';
                 }else{
                     return 'Pending';
@@ -48,44 +48,44 @@ class FilesController extends Controller
 
             })
             ->editColumn('update', function ($data) {
-                if ($data->update === 0) {
+                if ((int)$data->update  == 0) {
                     return "No Processes";
-                }elseif($data->update === 1 ){
+                }elseif((int)$data->update == 1 ){
                     return 'Success';
-                }elseif($data->update === 3 ){
-                    return 'Partial Success';
-                }else{
+                }elseif((int)$data->update == 2 ){
                     return 'Failed';
+                }elseif((int)$data->update == 3 ){
+                    return 'Partial Success';
                 };
 
             })
             ->editColumn('insert', function ($data) {
-                if ($data->insert === 0) {
+                if ($data->insert == 0) {
                     return "No Processes";
-                }elseif($data->insert === 1 ){
+                }elseif($data->insert == 1 ){
                     return 'Success';
-                }elseif($data->insert === 3 ){
-                    return 'Partial Success';
-                }else{
+                }elseif($data->insert == 2 ){
                     return 'Failed';
+                }elseif($data->insert == 3 ){
+                    return 'Partial Success';
                 };
 
             })
             ->editColumn('filename', function ($data) {
-                if(env('APP_ENV','local') == 'local'){
-                    return '<a href="/download_file/'.$data->filename.'">'.substr($data->filename, 0, 10).'</a>';
+                if(\App::environment('local') || \App::environment('stage')){
+                    return '<a href="/download_file/'.$data->filename.'">'.$data->classRoom->name.'</a>';
 
                 }else{
-                    return '<a href="/bulk-upload/download_file/'.$data->filename.'">'.substr($data->filename, 0, 10).'</a>';
+                    return '<a href="/bulk-upload/download_file/'.$data->filename.'">'.$data->classRoom->name.'</a>';
                 }
 
             })
              ->editColumn('error', function ($data) {
-                if(env('APP_ENV','local') == 'local'){
-                    return '<a href="/download/'.$data->filename.'">'.substr($data->filename, 0, 10).'</a>';
+                if(\App::environment('local') || \App::environment('stage')){
+                    return '<a href="/download/'.$data->filename.'">'.$data->classRoom->name.'</a>';
 
                 }else{
-                    return '<a href="/bulk-upload/download/'.$data->filename.'">'.substr($data->filename, 0,10).'</a>';
+                    return '<a href="/bulk-upload/download/'.$data->filename.'">'.$data->classRoom->name.'</a>';
                 }
 
             })->editColumn('actions', function ($data) {
